@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pong Game</title>
+    <style>
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: radial-gradient(circle, #1a1a2e, #16213e);
+        }
+        canvas {
+            border: 2px solid #00f;
+            background: rgba(0, 0, 0, 0.5);
+        }
+        .controls {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="pongCanvas"></canvas>
+    <div class="controls">
+        <label for="skin">Select Skin:</label>
+        <select id="skin">
+            <option value="seahawks">Seahawks</option>
+            <option value="lakers">Lakers</option>
+        </select>
+    </div>
+    <script>
+        const canvas = document.getElementById("pongCanvas");
+        const ctx = canvas.getContext("2d");
+        const skinSelector = document.getElementById("skin");
+
+        canvas.width = 800;
+        canvas.height = 500;
+
+        const paddleWidth = 10, paddleHeight = 100;
+        let ball = { x: canvas.width / 2, y: canvas.height / 2, radius: 8, dx: 5, dy: 5, trail: [] };
+        let leftPaddle = { x: 10, y: (canvas.height - paddleHeight) / 2, dy: 0 };
+        let rightPaddle = { x: canvas.width - 20, y: (canvas.height - paddleHeight) / 2, dy: 0 };
+        let leftScore = 0, rightScore = 0;
+        let ballHistory = [];
+        let skin = "seahawks";
+
+        // Track rewind usage per player
+        let leftRewinds = 0, rightRewinds = 0;
+        const maxRewinds = 2; // Max rewinds per point
+        const winScore = 10;  // Set the win score to 10
+
+        function saveBallState() {
+            ballHistory.push({ x: ball.x, y: ball.y, dx: ball.dx, dy: ball.dy });
+            if (ballHistory.length > 30) ballHistory.shift(); // Reduced rewind time to 30 frames
+        }
+
+        function rewindBall(player) {
+            if (player === "left" && leftRewinds < maxRewinds) {
+                if (ballHistory.length > 0) {
+                    let state = ballHistory.shift();
+                    ball.x = state.x;
+                    ball.y = state.y;
+                    ball.dx = state.dx;
+                    ball.dy = state.dy;
+                    leftRewinds++;
+                }
+            } else if (player === "right" && rightRewinds < maxRewinds) {
+                if (ballHistory.length > 0) {
+                    let state = ballHistory.shift();
+                    ball.x = state.x;
+                    ball.y = state.y;
+                    ball.dx = state.dx;
+                    ball.dy = state.dy;
+                    rightRewinds++;
+                }
+            }
+        }
+
+        function drawPaddle(paddle) {
+            if (skin === "seahawks") {
+                ctx.fillStyle = "#00A9A5"; // Teal color for the Seahawks skin
+            } else if (skin === "lakers") {
+                ctx.fillStyle = "#FDB927"; // Lakers yellow color
+            }
+            ctx.fillRect(paddle.x, paddle.y, paddleWidth, paddleHeight);
+        }
+
+        function drawBall() {
+            // Ball design based on selected skin
+            if (skin === "seahawks") {
+                // Gradient ball for Seahawks
+                let grd = ctx.createRadialGradient(ball.x, ball.y, 0, ball.x, ball.y, ball.radius);
+                grd.addColorStop(0, "#69BE28"); // Bright green center
+                grd.addColorStop(1, "#00A9A5"); // Teal outer color
+                ctx.fillStyle = grd;
+            } else if (skin === "lakers") {
+                // Purple ball for Lakers
+                ctx.fillStyle = "#552583"; // Lakers purple color
+            }
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.closePath();
+
+            // Draw ball trail with gradient effect
+            for (let i = 0; i < ball.trail.length; i++) {
+                let trail = ball.trail[i];
+                let opacity = 1 - i / ball.trail.length;
+                if (skin === "seahawks") {
+                    ctx.fillStyle = `rgba(105, 190, 40, ${opacity})`; // Seahawks ball trail color
+                } else if (skin === "lakers") {
+                    ctx.fillStyle = `rgba(85, 37, 131, ${opacity})`; // Lakers purple ball trail color
+                }
+                ctx.beginPath();
+                ctx.arc(trail.x, trail.y, ball.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+
+        function drawScore() {
+            ctx.fillStyle = "#fff";
+            ctx.font = "20px Arial";
+            ctx.fillText(`Player 1: ${leftScore}`, 50, 30);
+            ctx.fillText(`Player 2: ${rightScore}`, canvas.width - 150, 30);
+        }
+
+        function drawRewindMessage() {
+            ctx.fillStyle = "#FF0000";
+            ctx.font = "16px Arial";
+            if (leftRewinds >= maxRewinds) {
+                ctx.fillText("Player 1: Rewinds Used Up!", 50, 50);
+            }
+            if (rightRewinds >= maxRewinds) {
+                ctx.fillText("Player 2: Rewinds Used Up!", canvas.width - 200, 50);
+            }
+        }
+
+        function moveBall() {
+            ball.x += ball.dx;
+            ball.y += ball.dy;
+            if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) ball.dy *= -1;
+            if (
+                (ball.x - ball.radius < leftPaddle.x + paddleWidth && ball.y > leftPaddle.y && ball.y < leftPaddle.y + paddleHeight) ||
+                (ball.x + ball.radius > rightPaddle.x && ball.y > rightPaddle.y && ball.y < rightPaddle.y + paddleHeight)
+            ) ball.dx *= -1;
+            if (ball.x < 0) { 
+                rightScore++; 
+                if (rightScore >= winScore) { 
+                    alert("Player 2 wins!"); // Player 2 wins
+                    resetBall();
+                } else {
+                    resetBall(); 
+                }
+            }
+            if (ball.x > canvas.width) { 
+                leftScore++; 
+                if (leftScore >= winScore) { 
+                    alert("Player 1 wins!"); // Player 1 wins
+                    resetBall();
+                } else {
+                    resetBall(); 
+                }
+            }
+        }
+
+        function resetBall() {
+            ball.x = canvas.width / 2;
+            ball.y = canvas.height / 2;
+            ball.dx = -ball.dx;
+            ball.trail = []; // Reset trail when the ball resets
+            leftRewinds = 0; // Reset left player rewinds
+            rightRewinds = 0; // Reset right player rewinds
+        }
+
+        function updatePaddle(paddle) {
+            paddle.y += paddle.dy;
+            if (paddle.y < 0) paddle.y = 0;
+            if (paddle.y + paddleHeight > canvas.height) paddle.y = canvas.height - paddleHeight;
+        }
+
+        function gameLoop() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawPaddle(leftPaddle);
+            drawPaddle(rightPaddle);
+            drawBall();
+            drawScore();
+            drawRewindMessage();
+            moveBall();
+            updatePaddle(leftPaddle);
+            updatePaddle(rightPaddle);
+            saveBallState();
+
+            // Save the current ball position for the trail effect
+            ball.trail.push({ x: ball.x, y: ball.y });
+            if (ball.trail.length > 10) ball.trail.shift(); // Limit trail length
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "w") leftPaddle.dy = -5;
+            if (e.key === "s") leftPaddle.dy = 5;
+            if (e.key === "ArrowUp") rightPaddle.dy = -5;
+            if (e.key === "ArrowDown") rightPaddle.dy = 5;
+            if (e.key === "a") rewindBall("left");
+            if (e.key === "ArrowRight") rewindBall("right");
+        });
+
+        window.addEventListener("keyup", (e) => {
+            if (e.key === "w" || e.key === "s") leftPaddle.dy = 0;
+            if (e.key === "ArrowUp" || e.key === "ArrowDown") rightPaddle.dy = 0;
+        });
+
+        skinSelector.addEventListener("change", (e) => {
+            skin = e.target.value;
+        });
+
+        gameLoop();
+    </script>
+</body>
+</html>
